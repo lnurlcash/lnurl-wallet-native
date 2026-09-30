@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # release.yml reuses these checks before it builds anything
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Rust toolchain
+        # rustup is preinstalled on every hosted runner - no third-party action
+        run: rustup toolchain install stable --profile minimal -c clippy,rustfmt && rustup default stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      # the same targets a developer runs locally
+      - run: make lint
+      - run: make test
+      - run: make build
+
+  # the GUI stack differs per platform (winit, glow); build and test each
+  platforms:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+
+  # The wallet end to end against the real reference mint (lnurl-mint's
+  # server over its test suite's fake Lightning node, see
+  # dev/reference-mint.py). Tracks lnurl-mint's main, so a protocol change
+  # there shows up here first.
+  reference-mint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: lnurlcash/lnurl-mint
+          path: lnurl-mint
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - name: Build the tests while the mint installs
+        run: cargo test --locked --no-run
+      - name: Start the reference mint
+        working-directory: lnurl-mint
+        env:
+          LNURL_MINT_DIR: .
+        run: |
+          uv sync
+          nohup uv run python ../dev/reference-mint.py 8977 > ../reference-mint.log 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -sf "http://127.0.0.1:8977/_dev/invoice?amount=1000" > /dev/null && exit 0
+            sleep 1
+          done
+          cat ../reference-mint.log
+          exit 1
+      - run: make e2e
+      - if: failure()
+        run: cat reference-mint.log
