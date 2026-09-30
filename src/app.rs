@@ -339,6 +339,11 @@ impl App {
                 }
                 ui.add_space(16.0);
                 ui.label(RichText::new(path.display().to_string()).small().weak());
+                ui.label(
+                    RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
+                        .small()
+                        .weak(),
+                );
 
                 if submit && !busy {
                     if !exists && password != confirm {

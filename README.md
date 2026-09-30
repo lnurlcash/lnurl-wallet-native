@@ -126,14 +126,17 @@ make e2e              # terminal 2
 request: `make lint`, `make test` and `make build` on Linux, build and test
 on macOS and Windows, and `make e2e` against lnurl-mint's `main`.
 
-To release, bump `version` in `Cargo.toml`, commit, and push a matching tag:
+To release, push a version tag - there is nothing to bump:
 
 ```sh
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-[The release workflow](.github/workflows/release.yml) refuses a tag that
-doesn't match `Cargo.toml`, reruns CI, builds for Linux (x86_64, arm64),
+The version comes from the tag. `Cargo.toml` carries a `0.0.0-dev`
+placeholder, and [`scripts/set-version.sh`](scripts/set-version.sh) stamps the
+tag's version into `Cargo.toml` and `Cargo.lock` just before each release
+build; the app shows it on the unlock screen and with `--version`.
+[The release workflow](.github/workflows/release.yml) reruns CI, builds for Linux (x86_64, arm64),
 macOS (Apple silicon, Intel) and Windows, and publishes a GitHub Release with
 generated notes, one archive per platform and a `.sha256` file. The binaries
 are not code-signed.

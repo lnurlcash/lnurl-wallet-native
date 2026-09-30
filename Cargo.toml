@@ -1,6 +1,6 @@
 [package]
 name = "lnurl-wallet-native"
-version = "0.1.0"
+version = "0.0.0-dev" # stamped from the git tag on release, see scripts/set-version.sh
 edition = "2021"
 description = "Native desktop wallet for LNURLcash (LUD-25) bearer notes, built on lnurlcash-core"
 license = "MIT"

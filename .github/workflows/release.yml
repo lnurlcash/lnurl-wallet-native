@@ -1,7 +1,9 @@
 name: Release
 
-# Push a version tag matching Cargo.toml's version to release it:
+# Push a version tag to release it:
 #   git tag v0.1.0 && git push origin v0.1.0
+# The version comes from the tag: Cargo.toml only carries a 0.0.0-dev
+# placeholder, stamped per build by scripts/set-version.sh.
 on:
   push:
     tags: ['v*.*.*']
@@ -13,20 +15,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  version:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: The tag must match Cargo.toml
-        run: |
-          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
-          if [[ "v${version}" != "${GITHUB_REF_NAME}" ]]; then
-            echo "::error::tag ${GITHUB_REF_NAME} does not match Cargo.toml version ${version}"
-            exit 1
-          fi
-
   ci:
-    needs: version
     uses: ./.github/workflows/ci.yml
 
   build:
@@ -50,6 +39,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install stable --profile minimal -t ${{ matrix.target }} && rustup default stable
+      - name: Stamp the version from the tag
+        shell: bash
+        run: |
+          cargo fetch --locked
+          scripts/set-version.sh "${GITHUB_REF_NAME#v}"
       - run: cargo build --release --locked --target ${{ matrix.target }}
       - name: Package
         shell: bash

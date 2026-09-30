@@ -22,6 +22,11 @@ mod store;
 mod wallet;
 
 fn main() -> eframe::Result {
+    // the version is stamped from the release tag (scripts/set-version.sh)
+    if std::env::args().any(|a| a == "--version" || a == "-V") {
+        println!("lnurl-wallet-native {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("LNURLwallet")
